@@ -1,0 +1,46 @@
+
+- id: "motion_camera_alert"
+  alias: "Тестовая автоматизация"
+  trigger:
+    - platform: homeassistant
+      event: start
+  action:
+    - service: persistent_notification.create
+      data:
+        message: "Home Assistant запущен!"
+        title: "Тест"
+
+
+- id: "motion_camera_alert"
+  alias: "Отправка фото при движении камеры"
+  description: "Автоматическая отправка фото при обнаружении движения камерой"
+  trigger:
+    - platform: event
+      event_type: xiaomi_aqara.motion
+      event_data:
+        entity_id: camera.chuangmi_026c02_7a2a_motion_event
+  action:
+    - service: script.hallway_camera_snapshot_send
+    - delay: "00:00:05"
+    - service: telegram_bot.send_message
+      data:
+        message: "🚶 Обнаружено движение камерой!"
+        chat_id: 813740593
+
+
+- id: "motion_camera_alert Street"
+  alias: "Отправка фото при открытии калитки"
+  description: "Автоматическая отправка фото при открытии калитки"
+  trigger:
+    - platform: event
+      event_type:
+      event_data:
+        entity_id: camera.192_168_0_112
+  action:
+    - service: script.hallway_camera_snapshot_send
+    - delay: "00:00:05"
+    - service: telegram_bot.send_message
+      data:
+        message: "🚶 Обнаружено движение камерой!"
+        chat_id: 813740593
+

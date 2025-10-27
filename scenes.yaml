@@ -1,0 +1,70 @@
+- id: outside_open_gate
+  name: Open Gate
+  entities:
+    switch.sonoff_10025bf30f_1:
+      friendly_name: Gate Switch
+      state: 'off'
+    sensor.sonoff_10025bf30f_action:
+      friendly_name: Gate Action
+      state: ''
+    switch.sonoff_10025bf30f_detach:
+      friendly_name: Gate Detach
+      state: unknown
+    switch.sonoff_10025bf30f_led:
+      icon: mdi:led-off
+      friendly_name: Gate LED
+      state: 'on'
+    sensor.sonoff_10025bf30f_rssi:
+      state_class: measurement
+      unit_of_measurement: dBm
+      device_class: signal_strength
+      friendly_name: Gate RSSI
+      state: '-61'
+  metadata: {}
+  icon: mdi:chair-rolling
+- id: outside_light
+  name: Outside Light
+  entities:
+    switch.sonoff_1002530832_1:
+      friendly_name: Outside Light
+      state: 'off'
+    select.sonoff_1002530832_1:
+      options:
+      - 'off'
+      - 'on'
+      - stay
+      friendly_name: Outside Light
+      state: 'off'
+    sensor.sonoff_1002530832_action:
+      friendly_name: Outside Light Action
+      state: ''
+    switch.sonoff_1002530832_detach:
+      friendly_name: Outside Light Detach
+      state: unknown
+    sensor.sonoff_1002530832_rssi:
+      state_class: measurement
+      unit_of_measurement: dBm
+      device_class: signal_strength
+      friendly_name: Outside Light RSSI
+      state: '-77'
+  metadata: {}
+  icon: mdi:lightbulb-multiple
+- id: outside_camera
+  name: Outside Camera
+  entities:
+    camera.192_168_0_112:
+      access_token: 54106ffd67f1a8a01439417a5b0f7d65722ccc3fab2ac8019d99df53e2877ac0
+      entity_picture: /api/camera_proxy/camera.192_168_0_112?token=54106ffd67f1a8a01439417a5b0f7d65722ccc3fab2ac8019d99df53e2877ac0
+      friendly_name: Outside Camera
+      supported_features: 2
+      state: idle
+    automation.testovoe_uvedomlenie_v_telegram:
+      restored: true
+      id: testovoe_uvedomlenie_telegram
+      friendly_name: Test notification in Telegram
+      supported_features: 0
+      state: unavailable
+  metadata:
+    automation.testovoe_uvedomlenie_v_telegram:
+      entity_only: true
+  icon: mdi:cctv

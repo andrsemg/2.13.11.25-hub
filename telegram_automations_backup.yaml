@@ -1,0 +1,89 @@
+automation:
+
+  # Отправка фото при запуске Home Assistant
+  - id: send_photo_notification
+    alias: "Отправка уведомления с фото"
+    trigger:
+      - platform: homeassistant
+        event: start
+    action:
+      - service: camera.snapshot
+        target:
+          entity_id: camera.192_168_0_112
+        data:
+          filename: /config/camera_photos/snapshot.jpg
+      - delay:
+          seconds: 3  # Ждем 3 секунды для создания файла
+      - service: notify.telegram
+        data:
+          message: "🏠 Home Assistant запущен!"
+          data:
+            photo:
+              - file: /config/camera_photos/snapshot.jpg
+
+  # Обработка команды /start
+  - alias: "Telegram Bot - Start Command"
+    trigger:
+      platform: event
+      event_type: telegram_command
+      event_data:
+        command: "/start"
+    action:
+      - service: telegram_bot.send_message
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+          message: |
+            🏠 *Добро пожаловать в Home Assistant!*
+
+            Доступные команды:
+            • /system_status - Статус системы
+            • /light_control - Управление светом
+            • /climate_control - Управление климатом
+            • /security_check - Проверка безопасности
+            • /camera_view - Просмотр камер
+            • /notifications - Настройка уведомлений
+            • /help - Помощь
+
+            Выберите команду:
+          parse_mode: markdown
+          reply_markup:
+            inline_keyboard:
+              - ["🌡️ Статус системы", "/system_status"]
+              - ["💡 Управление светом", "/light_control"]
+              - ["❄️ Климат", "/climate_control"]
+
+  # Обработка команды /system_status
+  - alias: "Telegram Bot - System Status"
+    trigger:
+      platform: event
+      event_type: telegram_command
+      event_data:
+        command: "/system_status"
+    action:
+      - service: telegram_bot.send_message
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+          message: |
+            📊 *Статус системы*
+            • CPU: {{ states('sensor.cpu_temperature') }}°C
+            • Память: {{ states('sensor.memory_use_percent') }}%
+            • Uptime: {{ states('sensor.uptime') }}
+            • Версия HA: {{ states('sensor.ha_version') }}
+          parse_mode: markdown
+
+  # Обработка команды /light_control
+  - alias: "Telegram Bot - Light Control"
+    trigger:
+      platform: event
+      event_type: telegram_command
+      event_data:
+        command: "/light_control"
+    action:
+      - service: telegram_bot.send_message
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+          message: "💡 Управление светом пока не настроено."
+
+
+
+

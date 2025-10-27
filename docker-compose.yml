@@ -1,0 +1,5 @@
+volumes:
+  - /home/pi/snapshots:/config/www/snapshots
+  # ИЛИ с явным указанием пользователя:
+ # - /home/pi/snapshots:/config/www/snapshots:rw,Z  # :Z для SELinux (если используется)
+

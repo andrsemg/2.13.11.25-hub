@@ -1,0 +1,124 @@
+mobile_notification_switch_test:
+  mode: restart
+  sequence:
+  - alias: Set up variables
+    variables:
+      action_confirm: '{{ ''CONFIRM_'' ~ context.id }}'
+      action_dismiss: '{{ ''DISMISS_'' ~ context.id }}'
+  - alias: Send notification
+    domain: mobile_app
+    type: notify
+    device_id: 61dadb1c71ea3f1f584778bcf7887979
+    title: Привет
+    message: Приветики
+    data:
+      actions:
+      - action: '{{ action_confirm }}'
+        title: Confirm
+      - action: '{{ action_dismiss }}'
+        title: 'Привет текст свет '
+  - alias: Awaiting response
+    wait_for_trigger:
+    - trigger: event
+      event_type: mobile_app_notification_action
+      event_data:
+        action: '{{ action_confirm }}'
+    - trigger: event
+      event_type: mobile_app_notification_action
+      event_data:
+        action: '{{ action_dismiss }}'
+  - choose:
+    - conditions:
+      - condition: template
+        value_template: '{{ wait.trigger.event.data.action == action_confirm }}'
+      sequence:
+      - action: notify.notify_telegram
+        metadata: {}
+        data:
+          message: Привет
+      - type: turn_on
+        device_id: 4c4e6ad9b50929174035af5db613fa5c
+        entity_id: 9fe2e7ac4546499c3378ae5bd084bad9
+        domain: switch
+    - conditions:
+      - condition: template
+        value_template: '{{ wait.trigger.event.data.action == action_dismiss }}'
+      sequence:
+      - type: turn_on
+        device_id: a3b721d334ae8649d5694c44f5a2b877
+        entity_id: 62546465a99734f976f1c24d12999fde
+        domain: switch
+      - action: notify.notify_telegram
+        metadata: {}
+        data:
+          message: Привет свет в зале включили
+  alias: Mobile notification and switch test
+  description: 'Тест отправки уведомления и переключения выключателей через мобильное приложение'
+outside_camera_snapshot_send:
+  sequence:
+  - variables:
+      snapshot_file: /config/camera_photos/snapshot_{{ now().strftime('%Y%m%d_%H%M%S')
+        }}.jpg
+  - data:
+      filename: '{{ snapshot_file }}'
+    target:
+      entity_id:
+      - camera.192_168_0_112
+    action: camera.snapshot
+  - delay:
+      hours: 0
+      minutes: 0
+      seconds: 5
+      milliseconds: 0
+  - data:
+      caption: "\U0001F4F8 Снимок с камеры {{ now().strftime('%d.%m.%Y %H:%M:%S')
+        }}"
+      file: '{{ snapshot_file }}'
+      chat_id: 813740593
+    action: telegram_bot.send_photo
+  alias: Camera snapshot and send (outside)
+  description: 'Снимок с уличной камеры и отправка фото в Telegram'
+hallway_camera_snapshot_send:
+  sequence:
+  - variables:
+      snapshot_file: /config/camera_photos/snapshot_{{ now().strftime('%Y%m%d_%H%M%S')
+        }}.jpg
+  - data:
+      filename: '{{ snapshot_file }}'
+    action: camera.snapshot
+    target:
+      device_id: 9a2e86ad6a2150cbbdf7ecbc09267ffa
+  - delay:
+      hours: 0
+      minutes: 0
+      seconds: 5
+      milliseconds: 0
+  - data:
+      caption: "\U0001F4F8 Снимок с камеры {{ now().strftime('%d.%m.%Y %H:%M:%S')
+        }}"
+      file: '{{ snapshot_file }}'
+      chat_id: 813740593
+    action: telegram_bot.send_photo
+  alias: Camera snapshot and send (hallway)
+  description: 'Снимок с камеры в прихожей и отправка фото в Telegram'
+process_voice_command:
+  alias: Process voice command
+  description: 'Обрабатывает голосовую команду, отправляет её ассистенту и озвучивает ответ'
+  sequence:
+  - target:
+      entity_id: input_text.voice_question
+    data:
+      value: '{{ question }}'
+    action: input_text.set_value
+  - data:
+      question: '{{ question }}'
+    action: rest_command.ask_assistant
+  - delay:
+      hours: 0
+      minutes: 0
+      seconds: 40
+      milliseconds: 0
+  - data:
+      entity_id: media_player.browse_media
+      message: '{{ states(''sensor.assistant_response'') }}'
+    action: tts.google_translate_say

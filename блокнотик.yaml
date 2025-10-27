@@ -1,0 +1,132 @@
+
+
+#id: '1758754102235'
+#alias: Фото калитки в телеграм
+#description: 'Делает снимок калитки и отправляет в Telegram'
+#triggers:
+ # - platform: state
+  #  entity_id: switch.sonoff_10025bf30f_1  # Замените на понятное имя
+#conditions: []
+#actions:
+ # - action: camera.snapshot
+  #  data:
+   #   filename: /config/camera_photos/kalitka_{{ now().strftime('%Y%m%d_%H%M%S') }}.jpg
+   # target:
+    #  entity_id: camera.192_168_0_112
+ # - delay: '00:00:03'  # Даем время на создание снимка
+#  - action: telegram_bot.send_photo
+ #   data:
+  #    caption: '📸 Снимок калитки {{ now().strftime("%d.%m.%Y %H:%M:%S") }}'
+   #   file: /config/camera_photos/kalitka_{{ now().strftime('%Y%m%d_%H%M%S') }}.jpg
+    #  chat_id: 813740593
+#mode: single
+
+# Скопировать файл на хост
+docker cp home-assistant:/config/configuration.yaml ./configuration.yaml
+
+# Отредактировать файл
+nano configuration.yaml
+
+# Вернуть файл обратно в контейнер
+docker cp ./configuration.yaml home-assistant:/config/configuration.yaml
+
+
+
+-------------------
+docker rm wyoming-vosk
+wyoming-vosk
+wyoming-vosk
+pi@raspberrypi:~/vosk-model-small-ru-0.22$ docker run -d \
+  --name wyoming-vosk \
+  --restart=unless-stopped \
+  -p 10300:10300 \
+  -v /home/pi/vosk-model-small-ru-0.22:/model \
+  rhasspy/wyoming-vosk \
+  --data-dir /model
+0b0c06385ebd0f9521ae5cb2a26fb4b722120267484d1f1a4a54e743563a4b7b
+pi@raspberrypi:~/vosk-model-small-ru-0.22$ # Проверим статус контейнера
+docker ps | grep wyoming-vosk
+
+# Проверим логи
+docker logs wyoming-vosk
+
+# Проверим, слушает ли порт
+netstat -tlnp | grep 10300
+0b0c06385ebd   rhasspy/wyoming-vosk                           "bash /run.sh --data…"   42 seconds ago   Up 41 seconds   0.0.0.0:10300->10300/tcp, :::10300->10300/tcp   wyoming-vosk
+INFO:root:Ready
+(Not all processes could be identified, non-owned process info
+ will not be shown, you would have to be root to see it all.)
+tcp        0      0 0.0.0.0:10300           0.0.0.0:*               LISTEN      -                   
+tcp6       0      0 :::10300                :::*                    LISTEN      -                   
+pi@raspberrypi:~/vosk-model-small-ru-0.22$ # Проверим последние логи
+docker logs wyoming-vosk | tail -20
+INFO:root:Ready
+pi@raspberrypi:~/vosk-model-small-ru-0.22$
+
+# Создадим директорию для композ файлов
+mkdir -p /home/pi/docker
+nano /home/pi/docker/docker-compose.yml
+
+version: '3.8'
+
+services:
+  wyoming-vosk:
+    image: rhasspy/wyoming-vosk:latest
+    container_name: wyoming-vosk
+    restart: unless-stopped
+    ports:
+      - "10300:10300"
+    volumes:
+      - /home/pi/vosk-model-small-ru-0.22:/model
+    command: --data-dir /model
+
+
+# Перейдем в директорию с compose файлом
+cd /home/pi/docker
+
+# Остановим текущий контейнер
+docker stop wyoming-vosk
+docker rm wyoming-vosk
+
+# Запустим через compose
+docker-compose up -d
+
+# Проверим статус
+docker-compose ps
+
+
+
+# Статус всех сервисов
+docker-compose ps
+
+# Логи в реальном времени
+docker-compose logs -f wyoming-vosk
+
+# Остановка сервиса
+docker-compose stop
+
+# Запуск сервиса
+docker-compose start
+
+# Перезагрузка
+docker-compose restart wyoming-vosk
+
+# Обновление образа и перезапуск
+docker-compose pull && docker-compose up -d
+------------
+
+
+### Краткая шпаргалка "Какую команду выбрать?"
+
+| Ваша задача | Лучшая команда |
+| :--- | :--- |
+| **Посмотреть маленький файл** | 
+cat file.txt |
+| **Посмотреть большой файл / логи** | `less file.txt` |
+| **Увидеть только начало файла** | `head -n 20 file.txt` |
+| **Увидеть только конец файла (логи)** | `tail -n 50 file.txt` |
+| **Следить за обновлениями файла в реальном времени** | `tail -f /var/log/file.log` |
+| **Красивый просмотр с подсветкой** | `bat file.txt` (предварительно установить) |
+| **Открыть для просмотра/редактирования (просто)** | `nano file.txt` |
+| **Открыть для просмотра/редактирования (продвинуто)** | `vim file.txt` |
+

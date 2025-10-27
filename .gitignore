@@ -1,0 +1,23 @@
+# Home Assistant секреты
+secrets.yaml
+*.log
+
+# Базы данных и кэш
+*.db
+*.sqlite
+*.sqlite3
+.storage/
+.deps/
+__pycache__*
+
+# Бэкапы
+backups/
+*.tar
+*.tar.gz
+*.zip
+
+# Большие файлы
+core
+*.mp4
+*.avi
+*.mkv

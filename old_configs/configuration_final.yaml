@@ -1,0 +1,38 @@
+default_config:  # Loads default set of integrations. Do not remove.
+
+automation: !include automations.yaml
+frontend:
+  themes: !include_dir_merge_named themes
+
+script: !include scripts.yaml
+scene: !include scenes.yaml
+
+http:
+  ip_ban_enabled: false
+  login_attempts_threshold: 10
+
+telegram_bot:
+  - platform: polling
+    api_key: "8364524814:AAHUjHw3e9H3ATouGOzs3yafJtPwidBqSRE"
+    allowed_chat_ids:
+      - 813740593  # Ваш chat_id
+
+notify:
+  - name: notify.telegram
+    platform: telegram
+    chat_id: 813740593
+
+
+homeassistant:
+  allowlist_external_dirs:
+    - /config/camera_photos  # ← Исправлено!и не менять
+
+
+
+  use_x_forwarded_for: true
+  trusted_proxies:
+    - 192.168.192.0/24  # Ваша ZeroTier сеть
+    - 127.0.0.1
+    - ::1
+  ip_ban_enabled: false
+  login_attempts_threshold: 10

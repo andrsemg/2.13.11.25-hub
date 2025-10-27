@@ -1,0 +1,90 @@
+default_config:
+# configuration.yaml
+telegram_bot:
+  - platform: polling
+    api_key: !secret telegram_token
+    allowed_chat_ids:
+      - !secret telegram_chat_id
+
+notify:
+  - name: telegram
+    platform: telegram
+    chat_id: !secret telegram_chat_id
+    access_token: !secret telegram_token
+
+# Подключаем внешние файлы
+automation: !include automations.yaml
+script: !include scripts.yaml
+scene: !include scenes.yaml
+
+# Базовые настройки
+homeassistant:
+  allowlist_external_dirs:
+    - /config/camera_photos
+
+http:
+  use_x_forwarded_for: true
+  trusted_proxies:
+    - 192.168.192.172
+    - 192.168.192.0/24
+    - 127.0.0.1/32
+    - ::1/128
+  ip_ban_enabled: false
+  login_attempts_threshold: 10
+  cors_allowed_origins:
+    - https://cast.home-assistant.io
+
+frontend:
+  themes: !include_dir_merge_named themes
+
+# AI Помощник
+input_text:
+  assistant_question:
+    name: "Assistant question"
+    initial: ""
+  voice_question:
+    name: "Voice question"
+    initial: ""
+
+# REST-запрос к Ollama
+rest_command:
+  ask_assistant:
+    url: "http://localhost:11434/api/generate"
+    timeout: 60
+    method: POST
+    content_type: "application/json"
+    payload: >
+      {
+        "model": "llama3.2:3b-instruct-q3_K_M",
+        "prompt": "Ты голосовой помощник Home Assistant. Отвечай кратко (1–2 предложения) на русском. Будь естественным. Вопрос: {{ question }}",
+        "stream": false
+      }
+
+# Голосовой помощник (Wyoming)
+wyoming:
+
+assist_pipeline:
+
+# TTS (Google Translate)
+tts:
+  - platform: google_translate
+    language: "ru"
+
+# Сенсоры
+sensor:
+  - platform: template
+    sensors:
+      automation_count:
+        friendly_name: "Automation count"
+        value_template: "{{ states.automation | list | length }}"
+      entity_count:
+        friendly_name: "Entity count"
+        value_template: "{{ states | list | length }}"
+      assistant_response:
+        friendly_name: "Assistant response"
+        value_template: >
+          {% set response = state_attr('rest_command.ask_assistant', 'response') %}
+          {{ response if response else 'Нет ответа' }}
+      last_voice_command:
+        friendly_name: "Last voice command"
+        value_template: "{{ states('input_text.voice_question') }}"

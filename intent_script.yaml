@@ -1,0 +1,13 @@
+
+Turn on light:
+  action:
+    - service: light.turn_on
+      target:
+        entity_id: light.led_strip
+
+Turn off light:
+  action:
+    - service: light.turn_off
+      target:
+        entity_id: light.led_strip
+
