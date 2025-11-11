@@ -1,0 +1,53 @@
+
+
+#id: '1758754102235'
+#alias: Фото калитки в телеграм
+#description: 'Делает снимок калитки и отправляет в Telegram'
+#triggers:
+ # - platform: state
+  #  entity_id: switch.sonoff_10025bf30f_1  # Замените на понятное имя
+#conditions: []
+#actions:
+ # - action: camera.snapshot
+  #  data:
+   #   filename: /config/camera_photos/kalitka_{{ now().strftime('%Y%m%d_%H%M%S') }}.jpg
+   # target:
+    #  entity_id: camera.192_168_0_112
+ # - delay: '00:00:03'  # Даем время на создание снимка
+#  - action: telegram_bot.send_photo
+ #   data:
+  #    caption: '📸 Снимок калитки {{ now().strftime("%d.%m.%Y %H:%M:%S") }}'
+   #   file: /config/camera_photos/kalitka_{{ now().strftime('%Y%m%d_%H%M%S') }}.jpg
+    #  chat_id: 813740593
+#mode: single
+
+# Скопировать файл на хост
+docker cp home-assistant:/config/configuration.yaml ./configuration.yaml
+
+# Отредактировать файл
+nano configuration.yaml
+
+# Вернуть файл обратно в контейнер
+docker cp ./configuration.yaml home-assistant:/config/configuration.yaml
+
+
+
+
+# Wyoming integration for Vosk
+wyoming:
+  vosk:
+    uri: "tcp://192.168.0.106:10300"
+    language: "ru"
+
+# Assist pipeline configuration
+assist_pipeline:
+  stt:
+    - platform: wyoming
+      uri: "tcp://192.168.0.106:10300"
+  tts:
+    - platform: wyoming
+      uri: "tcp://192.168.0.106:10300"
+  language: "ru"
+
+# Conversation (optional)
+#conversation:

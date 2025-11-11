@@ -1,0 +1,33 @@
+
+
+id: '1758754102235'
+alias: Фото калитки в телеграм
+description: 'Делает снимок калитки и отправляет в Telegram'
+triggers:
+  - platform: state
+    entity_id: switch.sonoff_10025bf30f_1  # Замените на понятное имя
+conditions: []
+actions:
+  - action: camera.snapshot
+    data:
+      filename: /config/camera_photos/kalitka_{{ now().strftime('%Y%m%d_%H%M%S') }}.jpg
+    target:
+      entity_id: camera.192_168_0_112
+  - delay: '00:00:03'  # Даем время на создание снимка
+  - action: telegram_bot.send_photo
+    data:
+      caption: '📸 Снимок калитки {{ now().strftime("%d.%m.%Y %H:%M:%S") }}'
+      file: /config/camera_photos/kalitka_{{ now().strftime('%Y%m%d_%H%M%S') }}.jpg
+      chat_id: 813740593
+mode: single
+
+# Копируем файл на Raspberry Pi
+docker cp home-assistant:/config/automations.yaml /tmp/automations.yaml
+
+# Открываем в nano
+nano /tmp/automations.yaml
+
+# После редактирования копируем обратно
+docker cp /tmp/automations.yaml home-assistant:/config/automations.yaml
+
+

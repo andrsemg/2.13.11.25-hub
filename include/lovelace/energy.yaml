@@ -1,0 +1,27 @@
+- path: energy-dashboard
+  title: Энергопотребление
+  icon: mdi:flash
+  cards:
+    - type: statistics-graph
+      entity: sensor.energy_total_daily
+      title: Ежедневное потребление
+      period: 30days
+      stat_types:
+        - change
+
+    - type: energy-distribution
+      title: Распределение энергии
+      grid_consumption_entity: sensor.energy_total_daily
+      devices:
+        - entity: sensor.fridge_energy
+          name: Холодильник
+        - entity: sensor.washing_machine_energy
+          name: Стиральная машина
+
+    - type: history-graph
+      title: Потребление за 24 часа
+      entities:
+        - entity: sensor.energy_total_daily
+          name: Общее потребление
+      hours_to_show: 24
+

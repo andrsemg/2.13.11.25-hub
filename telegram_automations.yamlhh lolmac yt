@@ -1,0 +1,18 @@
+- id: send_photo_notification
+  alias: "Отправка уведомления с фото"
+  trigger:  # Добавлен обязательный триггер
+    - platform: homeassistant
+      event: start
+
+service: camera.snap
+- id: send_photo_notification
+  alias: "Отправка уведомления с фото"
+  trigger:
+    - platform: homeassistant
+      event: start
+  action:
+    - service: camera.snapshot
+      target:
+        entity_id: camera.your_camera_entity
+      data:
+        filename: /config/camera_photos/snapshot.jpg

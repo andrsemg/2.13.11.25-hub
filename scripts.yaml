@@ -53,7 +53,8 @@ mobile_notification_switch_test:
         data:
           message: Привет свет в зале включили
   alias: Mobile notification and switch test
-  description: 'Тест отправки уведомления и переключения выключателей через мобильное приложение'
+  description: Тест отправки уведомления и переключения выключателей через мобильное
+    приложение
 outside_camera_snapshot_send:
   sequence:
   - variables:
@@ -77,7 +78,7 @@ outside_camera_snapshot_send:
       chat_id: 813740593
     action: telegram_bot.send_photo
   alias: Camera snapshot and send (outside)
-  description: 'Снимок с уличной камеры и отправка фото в Telegram'
+  description: Снимок с уличной камеры и отправка фото в Telegram
 hallway_camera_snapshot_send:
   sequence:
   - variables:
@@ -100,10 +101,11 @@ hallway_camera_snapshot_send:
       chat_id: 813740593
     action: telegram_bot.send_photo
   alias: Camera snapshot and send (hallway)
-  description: 'Снимок с камеры в прихожей и отправка фото в Telegram'
+  description: Снимок с камеры в прихожей и отправка фото в Telegram
 process_voice_command:
   alias: Process voice command
-  description: 'Обрабатывает голосовую команду, отправляет её ассистенту и озвучивает ответ'
+  description: Обрабатывает голосовую команду, отправляет её ассистенту и озвучивает
+    ответ
   sequence:
   - target:
       entity_id: input_text.voice_question
@@ -122,3 +124,15 @@ process_voice_command:
       entity_id: media_player.browse_media
       message: '{{ states(''sensor.assistant_response'') }}'
     action: tts.google_translate_say
+vhodnaia_dver:
+  sequence:
+  - type: turn_on
+    device_id: 403c652d7b3b147c0189198b437d0fca
+    entity_id: d7afcf3016520f60da409437416ccbbb
+    domain: switch
+  alias: 'Входная дверь '
+  description: ''
+  fields:
+    поле:
+      selector:
+        text:

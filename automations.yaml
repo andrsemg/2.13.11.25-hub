@@ -1,148 +1,156 @@
+##############################################################
+# ⏰ БУДИЛЬНИКИ
+##############################################################
 - id: '1758485977699'
-  alias: Будильник 5 50
-  description: ''
-  triggers:
-  - trigger: time
-    at: 05:50:00
-  conditions:
-  - condition: and
-    conditions:
+  alias: Будильник 5:50 (утро, если дома)
+  trigger:
+    - platform: time
+      at: "05:50:00"
+  condition:
     - condition: sun
       after: sunrise
       before: sunset
-  - condition: zone
-    entity_id: person.pilot
-    zone: zone.zona_doma
-  actions:
-  - action: scene.turn_on
-    metadata: {}
-    data: {}
-    target:
-      entity_id: scene.outside_light
+    - condition: zone
+      entity_id: person.pilot
+      zone: zone.zona_doma
+  action:
+    - service: scene.turn_on
+      target:
+        entity_id: scene.outside_light
   mode: single
+
+##############################################################
+# 🏠 ПРИСУТСТВИЕ
+##############################################################
 - id: '1758565181246'
   alias: Люда не дома
-  description: Когда Люда вышла из дома
+  description: Когда Люда выходит из дома
   use_blueprint:
     path: homeassistant/notify_leaving_zone.yaml
     input:
       person_entity: person.lydmila
       zone_entity: zone.zona_doma
       notify_device: 61dadb1c71ea3f1f584778bcf7887979
+
+##############################################################
+# 📸 КАМЕРЫ И УВЕДОМЛЕНИЯ
+##############################################################
 - id: '1758828162807'
-  alias: Фото калитки в телеграм
-  description: ''
-  triggers:
-  - type: changed_states
-    device_id: 881625a7f60da23eaf0221b68fe29ae9
-    entity_id: ebb0e68cf97d1d4f4ec9b27321928471
-    domain: switch
-    trigger: device
-  conditions: []
-  actions:
-  - action: script.outside_camera_snapshot_send
-    metadata: {}
-    data: {}
-  - delay:
-      hours: 0
-      minutes: 0
-      seconds: 5
-      milliseconds: 0
-  - action: notify.notify_telegram
-    data:
-      message: Фото калит
+  alias: Фото калитки в Telegram
+  trigger:
+    # исходный триггер был device-change; заменил на state-триггер для switch-entity
+    - platform: state
+      entity_id: switch.ebb0e68cf97d1d4f4ec9b27321928471
+  action:
+    - service: script.outside_camera_snapshot_send
+    - delay: "00:00:05"
+    - service: notify.telegram
+      data:
+        message: "Фото калитки отправлено 📷"
   mode: single
-- id: '1759561522769'
-  alias: Фото прихожая - прямая отправка
-  description: ''
-  triggers:
-  - entity_id: sensor.mi_6525865227_message
-    trigger: state
-  conditions:
-  - condition: template
-    value_template: '{{ "Обнаружено движение" in trigger.to_state.state }}'
-  actions:
-  - data:
-      filename: /config/www/current_photo.jpg
-    action: camera.snapshot
-    target:
-      entity_id: camera.chuangmi_026c02_7a2a_motion_event
-  - delay: 00:00:05
-  - data:
-      chat_id: 813740593
-      photo: /config/www/current_photo.jpg
-      caption: "\U0001F4F8 {{ now().strftime('%H:%M:%S') }}"
-    action: telegram_bot.send_photo
-  mode: single
+
 - id: '1759568984689'
-  alias: Фото прихожая в телеграм
-  description: ''
-  triggers:
-  - entity_id: sensor.mi_6525865227_message
-    trigger: state
-  conditions:
-  - condition: template
-    value_template: '{{ "Обнаружено движение" in trigger.to_state.state }}'
-  actions:
-  - action: script.hallway_camera_snapshot_send
-    data: {}
-  - delay:
-      hours: 0
-      minutes: 0
-      seconds: 5
-      milliseconds: 0
-  - action: notify.telegram
-    data:
-      message: Privet
+  alias: Фото прихожей в Telegram
+  trigger:
+    - platform: state
+      entity_id: sensor.mi_6525865227_message
+  condition:
+    - condition: template
+      value_template: "{{ 'Обнаружено движение' in trigger.to_state.state }}"
+  action:
+    - service: script.hallway_camera_snapshot_send
+    - delay: "00:00:05"
+    - service: notify.telegram
+      data:
+        message: "📸 Фото из прихожей отправлено"
   mode: single
-- alias: Обработка голосовых команд через Wyoming
-  description: Автоматически обрабатывает голосовые команды через Assist Pipeline
-  trigger:
-    platform: event
-    event_type: assist_pipeline.run
-  action:
-  - service: script.process_voice_command
-    data:
-      question: '{{ trigger.event.data.text }}'
-  id: e79ada45711c475f98e23997f5ed8ba8
-- alias: Логирование голосовых команд
-  description: Записывает все голосовые команды для отладки
-  trigger:
-    platform: event
-    event_type: assist_pipeline.run
-  action:
-  - service: persistent_notification.create
-    data:
-      title: Голосовая команда
-      message: 'Получено: {{ trigger.event.data.text }}'
-      notification_id: voice_command_log
-  id: 4af74ca44e7a45a4b30af20e9c19a312
+
 - id: '1761435419954'
-  alias: Сообщение о статусе света на улице
-  description: ''
-  triggers:
-  - type: changed_states
-    device_id: 2332f306a04c332179cca46f72683388
-    entity_id: c0e2dbf9bfc9b4acbf9c79057b25fcb1
-    domain: switch
-    trigger: device
-  conditions: []
-  actions:
-  - action: notify.mobile_app_iphone_andrey
-    metadata: {}
-    data:
-      message: Свет на улице выключен/включен
+  alias: Уведомление о статусе света на улице
+  trigger:
+    # аналогично: заменил device-триггер на state-триггер для switch-entity
+    - platform: state
+      entity_id: switch.c0e2dbf9bfc9b4acbf9c79057b25fcb1
+  action:
+    - service: notify.telegram
+      data:
+        message: "💡 Свет на улице выключен/включен"
   mode: single
-- id: '1761457015795'
+
+##############################################################
+# 🤖 ГОЛОСОВЫЕ КОМАНДЫ (WYOMING + GEMINI)
+##############################################################
+- id: 'wyoming_voice_processing'
   alias: Обработка голосовых команд через Wyoming
-  description: Автоматически обрабатывает голосовые команды через Assist Pipeline
-  triggers:
-  - event_type: assist_pipeline.run
-    trigger: event
-  conditions: []
-  actions:
-  - data:
-      question: '{{ trigger.event.data.text }}'
-    action: script.process_voice_command
-    response_variable: Ну как то так
+  trigger:
+    - platform: event
+      event_type: assist_pipeline.run
+  action:
+    - service: script.process_voice_command
+      data:
+        question: "{{ trigger.event.data.text }}"
+  mode: single
+
+- id: 'wyoming_voice_logging'
+  alias: Логирование голосовых команд
+  trigger:
+    - platform: event
+      event_type: assist_pipeline.run
+  action:
+    - service: persistent_notification.create
+      data:
+        title: "Голосовая команда"
+        message: "Получено: {{ trigger.event.data.text }}"
+        notification_id: "voice_command_log"
+  mode: single
+
+- id: '1759561522769'
+  alias: Telegram Gemini Assistant
+  description: Обработка сообщений Telegram через Gemini AI
+  trigger:
+    - platform: event
+      event_type: telegram_message
+  variables:
+    user_text: "{{ trigger.event.data.text | default('') }}"
+  action:
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ user_text == '/start' }}"
+          sequence:
+            - service: notify.telegram
+              data:
+                message: "Привет! Я ваш AI-помощник 🤖 Задавайте вопросы!"
+        - conditions:
+            - condition: template
+              value_template: "{{ user_text not in ['', '/start'] }}"
+          sequence:
+            - service: conversation.process
+              data:
+                text: "{{ user_text }}"
+            - delay: "00:00:03"
+            - service: notify.telegram
+              data:
+                message: "{{ states('conversation.last_response') | default('Нет ответа от AI 😕') }}"
+  mode: single
+
+##############################################################
+# 🧩 ОТЛАДКА
+##############################################################
+- id: 'debug_telegram_events'
+  alias: Debug Telegram Events
+  description: Логирование всех Telegram-событий для отладки
+  trigger:
+    - platform: event
+      event_type: telegram_message
+  action:
+    - service: persistent_notification.create
+      data:
+        title: "Telegram Event Debug"
+        message: |
+          Полное событие:
+          {{ trigger }}
+          ---
+          Текст: {{ trigger.data.text | default('NO_TEXT') }}
+          Chat ID: {{ trigger.data.chat_id | default('NO_CHAT_ID') }}
   mode: single

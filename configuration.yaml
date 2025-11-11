@@ -88,3 +88,32 @@ sensor:
       last_voice_command:
         friendly_name: "Last voice command"
         value_template: "{{ states('input_text.voice_question') }}"
+
+intent_script:
+  ask_gemini:
+    speech:
+      text: "{{ states('conversation.last_response') }}"
+
+# В configuration.yaml
+utility_meter:
+  energy_total:
+    source: sensor.individual_energy_1  # Укажите ваш главный счетчик ИЛИ
+    # ...или используйте шаблон для суммирования нескольких датчиков:
+    # source: >
+    #   {{ states('sensor.plug_1_energy') | float(0) 
+    #    + states('sensor.plug_2_energy') | float(0) 
+    #    + states('sensor.heater_energy') | float(0) }}
+    name: Total Energy Consumption
+    cycle: monthly  # Сбрасывается каждый месяц. Можно также указать hourly, daily, quarterly, yearly.
+
+
+
+lovelace:
+  mode: yaml
+  dashboards:
+    energy-dashboard:
+      mode: yaml
+      title: Энергопотребление
+      filename: include/lovelace/energy.yaml
+      icon: mdi:flash
+      show_in_sidebar: true

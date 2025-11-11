@@ -1,0 +1,85 @@
+- id: motion_camera_alert
+  alias: Отправка фото при движении камеры
+  description: Автоматическая отправка фото при обнаружении движения камерой
+  triggers:
+  - event_type: xiaomi_aqara.motion
+    event_data:
+      entity_id: camera.chuangmi_026c02_7a2a_motion_event
+    trigger: event
+  actions:
+  - action: script.camera_snapshot_and_send
+    data: {}
+  - delay: 00:00:05
+  - data:
+      message: "\U0001F6B6 Обнаружено движение2 камерой!"
+      chat_id: 813740593
+    action: telegram_bot.send_message
+- id: '1758485977699'
+  alias: Будильник 5 50
+  description: ''
+  triggers:
+  - trigger: time
+    at: 05:50:00
+  conditions:
+  - condition: and
+    conditions:
+    - condition: sun
+      after: sunrise
+      before: sunset
+  - condition: zone
+    entity_id: person.pilot
+    zone: zone.zona_doma
+  actions:
+  - action: scene.turn_on
+    metadata: {}
+    data: {}
+    target:
+      entity_id: scene.vykl_ili_vkl_tv_na_kukhne
+  mode: single
+- id: '1758565181246'
+  alias: Люда не дома
+  description: Когда Люда вышла из дома
+  use_blueprint:
+    path: homeassistant/notify_leaving_zone.yaml
+    input:
+      person_entity: person.lydmila
+      zone_entity: zone.zona_doma
+      notify_device: 61dadb1c71ea3f1f584778bcf7887979
+- id: '1758754102235'
+  alias: Фото калитки в телеграм
+  description: ''
+  triggers:
+  - type: changed_states
+    device_id: 881625a7f60da23eaf0221b68fe29ae9
+    entity_id: ebb0e68cf97d1d4f4ec9b27321928471
+    domain: switch
+    trigger: device
+  conditions: []
+  actions:
+  - action: camera.snapshot
+    metadata: {}
+    data:
+      filename: /config/camera_photos
+    target:
+      entity_id: camera.192_168_0_112
+  mode: single
+- id: '1758828162807'
+  alias: Фото калитки
+  description: ''
+  triggers:
+  - type: changed_states
+    device_id: 881625a7f60da23eaf0221b68fe29ae9
+    entity_id: ebb0e68cf97d1d4f4ec9b27321928471
+    domain: switch
+    trigger: device
+  conditions: []
+  actions:
+  - action: camera.snapshot
+    metadata: {}
+    data:
+      filename: /config/www/tmp/kalitka_snapshot.jpg
+  - action: notify.notify_telegram
+    metadata: {}
+    data:
+      message: Фото калит
+  mode: single

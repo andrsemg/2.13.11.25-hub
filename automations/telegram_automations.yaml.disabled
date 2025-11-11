@@ -1,0 +1,13 @@
+#automation:
+  # Простая автоматизация для теста
+  - alias: "Тестовая автоматизация"
+    trigger:
+      - platform: homeassistant
+        event: start
+    action:
+      - service: persistent_notification.create
+        data:
+          message: "Home Assistant запущен!"
+          title: "Тест"
+
+
