@@ -11,5 +11,7 @@
         {% set switch_count = states.switch | list | length %}
         {% set light_count = states.light | list | length %}
         {% set climate_count = states.climate | list | length %}
+        {% set binary_count = states.binary_sensor | list | length %}
         {% set total_count = states | list | length %}
         Система Home Assistant: {{ total_count }} сущностей, {{ auto_count }} автоматизаций, {{ sensor_count }} датчиков
+

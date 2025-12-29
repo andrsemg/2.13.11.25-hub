@@ -38,12 +38,16 @@ frontend:
   themes: !include_dir_merge_named themes
 
 # AI Помощник
+
 input_text:
   assistant_question:
     name: "Assistant question"
     initial: ""
   voice_question:
     name: "Voice question"
+    initial: ""
+  assistant_answer:
+    name: "Assistant answer"
     initial: ""
 
 # REST-запрос к Ollama
@@ -80,40 +84,15 @@ sensor:
       entity_count:
         friendly_name: "Entity count"
         value_template: "{{ states | list | length }}"
-      assistant_response:
-        friendly_name: "Assistant response"
-        value_template: >
-          {% set response = state_attr('rest_command.ask_assistant', 'response') %}
-          {{ response if response else 'Нет ответа' }}
       last_voice_command:
         friendly_name: "Last voice command"
         value_template: "{{ states('input_text.voice_question') }}"
 
-intent_script:
-  ask_gemini:
-    speech:
-      text: "{{ states('conversation.last_response') }}"
+#open route  В configuration.yaml должно быть ТОЛЬКО:
+conversation:
 
-# В configuration.yaml
-utility_meter:
-  energy_total:
-    source: sensor.individual_energy_1  # Укажите ваш главный счетчик ИЛИ
-    # ...или используйте шаблон для суммирования нескольких датчиков:
-    # source: >
-    #   {{ states('sensor.plug_1_energy') | float(0) 
-    #    + states('sensor.plug_2_energy') | float(0) 
-    #    + states('sensor.heater_energy') | float(0) }}
-    name: Total Energy Consumption
-    cycle: monthly  # Сбрасывается каждый месяц. Можно также указать hourly, daily, quarterly, yearly.
+# ВСЁ остальное через веб-интерфейс!
 
 
 
-lovelace:
-  mode: yaml
-  dashboards:
-    energy-dashboard:
-      mode: yaml
-      title: Энергопотребление
-      filename: include/lovelace/energy.yaml
-      icon: mdi:flash
-      show_in_sidebar: true
+

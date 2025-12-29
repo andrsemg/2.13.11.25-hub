@@ -124,15 +124,3 @@ process_voice_command:
       entity_id: media_player.browse_media
       message: '{{ states(''sensor.assistant_response'') }}'
     action: tts.google_translate_say
-vhodnaia_dver:
-  sequence:
-  - type: turn_on
-    device_id: 403c652d7b3b147c0189198b437d0fca
-    entity_id: d7afcf3016520f60da409437416ccbbb
-    domain: switch
-  alias: 'Входная дверь '
-  description: ''
-  fields:
-    поле:
-      selector:
-        text:

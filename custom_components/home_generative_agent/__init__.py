@@ -36,7 +36,6 @@ from psycopg_pool import AsyncConnectionPool, PoolTimeout
 from .agent.tools import analyze_image
 from .const import (
     CHAT_MODEL_MAX_TOKENS,
-    CHAT_MODEL_NUM_CTX,
     CHAT_MODEL_REPEAT_PENALTY,
     CHAT_MODEL_TOP_P,
     CONF_CHAT_MODEL_PROVIDER,
@@ -45,18 +44,24 @@ from .const import (
     CONF_DB_URI,
     CONF_EMBEDDING_MODEL_PROVIDER,
     CONF_FACE_API_URL,
-    CONF_FACE_RECOGNITION_MODE,
+    CONF_FACE_RECOGNITION,
     CONF_GEMINI_API_KEY,
     CONF_GEMINI_CHAT_MODEL,
     CONF_GEMINI_EMBEDDING_MODEL,
     CONF_GEMINI_SUMMARIZATION_MODEL,
     CONF_GEMINI_VLM,
+    CONF_OLLAMA_CHAT_CONTEXT_SIZE,
+    CONF_OLLAMA_CHAT_KEEPALIVE,
     CONF_OLLAMA_CHAT_MODEL,
     CONF_OLLAMA_EMBEDDING_MODEL,
     CONF_OLLAMA_REASONING,
+    CONF_OLLAMA_SUMMARIZATION_CONTEXT_SIZE,
+    CONF_OLLAMA_SUMMARIZATION_KEEPALIVE,
     CONF_OLLAMA_SUMMARIZATION_MODEL,
     CONF_OLLAMA_URL,
     CONF_OLLAMA_VLM,
+    CONF_OLLAMA_VLM_CONTEXT_SIZE,
+    CONF_OLLAMA_VLM_KEEPALIVE,
     CONF_OPENAI_CHAT_MODEL,
     CONF_OPENAI_EMBEDDING_MODEL,
     CONF_OPENAI_SUMMARIZATION_MODEL,
@@ -74,17 +79,21 @@ from .const import (
     RECOMMENDED_DB_URI,
     RECOMMENDED_EMBEDDING_MODEL_PROVIDER,
     RECOMMENDED_FACE_API_URL,
-    RECOMMENDED_FACE_RECOGNITION_MODE,
+    RECOMMENDED_FACE_RECOGNITION,
     RECOMMENDED_GEMINI_CHAT_MODEL,
     RECOMMENDED_GEMINI_EMBEDDING_MODEL,
     RECOMMENDED_GEMINI_SUMMARIZATION_MODEL,
     RECOMMENDED_GEMINI_VLM,
+    RECOMMENDED_OLLAMA_CHAT_KEEPALIVE,
     RECOMMENDED_OLLAMA_CHAT_MODEL,
+    RECOMMENDED_OLLAMA_CONTEXT_SIZE,
     RECOMMENDED_OLLAMA_EMBEDDING_MODEL,
     RECOMMENDED_OLLAMA_REASONING,
+    RECOMMENDED_OLLAMA_SUMMARIZATION_KEEPALIVE,
     RECOMMENDED_OLLAMA_SUMMARIZATION_MODEL,
     RECOMMENDED_OLLAMA_URL,
     RECOMMENDED_OLLAMA_VLM,
+    RECOMMENDED_OLLAMA_VLM_KEEPALIVE,
     RECOMMENDED_OPENAI_CHAT_MODEL,
     RECOMMENDED_OPENAI_EMBEDDING_MODEL,
     RECOMMENDED_OPENAI_SUMMARIZATION_MODEL,
@@ -95,12 +104,12 @@ from .const import (
     RECOMMENDED_VLM_TEMPERATURE,
     SIGNAL_HGA_NEW_LATEST,
     SIGNAL_HGA_RECOGNIZED,
-    SUMMARIZATION_MODEL_CTX,
+    SUMMARIZATION_MIRO_STAT,
     SUMMARIZATION_MODEL_PREDICT,
     SUMMARIZATION_MODEL_REPEAT_PENALTY,
     SUMMARIZATION_MODEL_TOP_P,
     VIDEO_ANALYZER_SNAPSHOT_ROOT,
-    VLM_NUM_CTX,
+    VLM_MIRO_STAT,
     VLM_NUM_PREDICT,
     VLM_REPEAT_PENALTY,
     VLM_TOP_P,
@@ -109,11 +118,13 @@ from .core.migrations import migrate_person_gallery
 from .core.person_gallery import PersonGalleryDAO
 from .core.runtime import HGAConfigEntry, HGAData
 from .core.utils import (
+    configured_ollama_urls,
     dispatch_on_loop,
     ensure_http_url,
     gemini_healthy,
     generate_embeddings,
     ollama_healthy,
+    ollama_url_for_category,
     openai_healthy,
     reasoning_field,
 )
@@ -296,18 +307,40 @@ async def async_setup_entry(hass: HomeAssistant, entry: HGAConfigEntry) -> bool:
     conf = {**entry.data, **entry.options}
     api_key = conf.get(CONF_API_KEY)
     gemini_key = conf.get(CONF_GEMINI_API_KEY)
-    ollama_url = conf.get(CONF_OLLAMA_URL, RECOMMENDED_OLLAMA_URL)
-    ollama_url = ensure_http_url(ollama_url)
+    base_ollama_url = ensure_http_url(conf.get(CONF_OLLAMA_URL, RECOMMENDED_OLLAMA_URL))
+    ollama_chat_url = (
+        ollama_url_for_category(conf, "chat", fallback=base_ollama_url)
+        or base_ollama_url
+    )
+    ollama_vlm_url = (
+        ollama_url_for_category(conf, "vlm", fallback=base_ollama_url)
+        or base_ollama_url
+    )
+    ollama_sum_url = (
+        ollama_url_for_category(conf, "summarization", fallback=base_ollama_url)
+        or base_ollama_url
+    )
     face_api_url = conf.get(CONF_FACE_API_URL, RECOMMENDED_FACE_API_URL)
     face_api_url = ensure_http_url(face_api_url)
 
     # Health checks (fast, non-fatal)
     health_timeout = 2.0
-    ollama_ok, openai_ok, gemini_ok = await asyncio.gather(
-        ollama_healthy(hass, ollama_url, timeout_s=health_timeout),
+    ollama_urls = configured_ollama_urls(conf, fallback=base_ollama_url)
+    ollama_health: dict[str, bool] = {}
+    if ollama_urls:
+        ollama_results = await asyncio.gather(
+            *(
+                ollama_healthy(hass, url, timeout_s=health_timeout)
+                for url in ollama_urls
+            )
+        )
+        ollama_health = dict(zip(ollama_urls, ollama_results, strict=False))
+
+    openai_ok, gemini_ok = await asyncio.gather(
         openai_healthy(hass, api_key, timeout_s=health_timeout),
         gemini_healthy(hass, gemini_key, timeout_s=health_timeout),
     )
+    ollama_any_ok = any(ollama_health.values())
 
     http_client = get_async_client(hass)
 
@@ -328,36 +361,49 @@ async def async_setup_entry(hass: HomeAssistant, entry: HGAConfigEntry) -> bool:
         except Exception:
             LOGGER.exception("OpenAI provider init failed; continuing without it.")
 
-    ollama_provider: RunnableSerializable[LanguageModelInput, BaseMessage] | None = None
-    if ollama_ok:
+    def _build_ollama_provider(
+        url: str,
+    ) -> RunnableSerializable[LanguageModelInput, BaseMessage]:
+        return ChatOllama(
+            model=RECOMMENDED_OLLAMA_CHAT_MODEL,
+            base_url=url,
+        ).configurable_fields(
+            model=ConfigurableField(id="model"),
+            format=ConfigurableField(id="format"),
+            temperature=ConfigurableField(id="temperature"),
+            top_p=ConfigurableField(id="top_p"),
+            num_predict=ConfigurableField(id="num_predict"),
+            num_ctx=ConfigurableField(id="num_ctx"),
+            repeat_penalty=ConfigurableField(id="repeat_penalty"),
+            reasoning=ConfigurableField(id="reasoning"),
+            mirostat=ConfigurableField(id="mirostat"),
+            keep_alive=ConfigurableField(id="keep_alive"),
+        )
+
+    ollama_providers: dict[
+        str, RunnableSerializable[LanguageModelInput, BaseMessage]
+    ] = {}
+    for url, healthy in ollama_health.items():
+        if not healthy:
+            continue
         try:
-            ollama_provider = ChatOllama(
-                model=RECOMMENDED_OLLAMA_CHAT_MODEL,
-                base_url=ollama_url,
-            ).configurable_fields(
-                model=ConfigurableField(id="model"),
-                format=ConfigurableField(id="format"),
-                temperature=ConfigurableField(id="temperature"),
-                top_p=ConfigurableField(id="top_p"),
-                num_predict=ConfigurableField(id="num_predict"),
-                num_ctx=ConfigurableField(id="num_ctx"),
-                repeat_penalty=ConfigurableField(id="repeat_penalty"),
-                reasoning=ConfigurableField(id="reasoning"),
-            )
+            ollama_providers[url] = _build_ollama_provider(url)
         except Exception:
-            LOGGER.exception("Ollama provider init failed; continuing without it.")
+            LOGGER.exception(
+                "Ollama provider init failed for %s; continuing without it.", url
+            )
 
     gemini_provider: RunnableSerializable[LanguageModelInput, BaseMessage] | None = None
     if gemini_ok:
         try:
             gemini_provider = ChatGoogleGenerativeAI(
                 api_key=gemini_key,
-                model=RECOMMENDED_GEMINI_CHAT_MODEL,  # default, will get overridden
+                model=RECOMMENDED_GEMINI_CHAT_MODEL,
             ).configurable_fields(
                 model=ConfigurableField(id="model"),
                 temperature=ConfigurableField(id="temperature"),
                 top_p=ConfigurableField(id="top_p"),
-                max_output_tokens=ConfigurableField(id="max_tokens"),
+                max_output_tokens=ConfigurableField(id="max_output_tokens"),
             )
         except Exception:
             LOGGER.exception("Gemini provider init failed; continuing without it.")
@@ -377,13 +423,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: HGAConfigEntry) -> bool:
             LOGGER.exception("OpenAI embeddings init failed; continuing without them.")
 
     ollama_embeddings: OllamaEmbeddings | None = None
-    if ollama_ok:
+    if ollama_health.get(base_ollama_url):
         try:
             ollama_embeddings = OllamaEmbeddings(
                 model=entry.options.get(
                     CONF_OLLAMA_EMBEDDING_MODEL, RECOMMENDED_OLLAMA_EMBEDDING_MODEL
                 ),
-                base_url=ollama_url,
+                base_url=base_ollama_url,
                 num_ctx=EMBEDDING_MODEL_CTX,
             )
         except Exception:
@@ -493,6 +539,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: HGAConfigEntry) -> bool:
     ollama_reasoning: bool = entry.options.get(
         CONF_OLLAMA_REASONING, RECOMMENDED_OLLAMA_REASONING
     )
+    chat_ollama_provider = ollama_providers.get(ollama_chat_url)
+    vlm_ollama_provider = ollama_providers.get(ollama_vlm_url)
+    summarization_ollama_provider = ollama_providers.get(ollama_sum_url)
 
     # CHAT
     chat_provider = entry.options.get(
@@ -501,12 +550,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: HGAConfigEntry) -> bool:
     chat_temp = entry.options.get(
         CONF_CHAT_MODEL_TEMPERATURE, RECOMMENDED_CHAT_MODEL_TEMPERATURE
     )
+    ollama_chat_keep_alive = entry.options.get(
+        CONF_OLLAMA_CHAT_KEEPALIVE, RECOMMENDED_OLLAMA_CHAT_KEEPALIVE
+    )
+    ollama_chat_context_size = entry.options.get(
+        CONF_OLLAMA_CHAT_CONTEXT_SIZE, RECOMMENDED_OLLAMA_CONTEXT_SIZE
+    )
     ollama_chat_model_options = {
         "temperature": chat_temp,
         "top_p": CHAT_MODEL_TOP_P,
         "num_predict": CHAT_MODEL_MAX_TOKENS,
-        "num_ctx": CHAT_MODEL_NUM_CTX,
+        "num_ctx": ollama_chat_context_size,
         "repeat_penalty": CHAT_MODEL_REPEAT_PENALTY,
+        "keep_alive": ollama_chat_keep_alive,
     }
     if chat_provider == "openai":
         chat_model = (openai_provider or NullChat()).with_config(
@@ -517,7 +573,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: HGAConfigEntry) -> bool:
                     ),
                     "temperature": chat_temp,
                     "top_p": CHAT_MODEL_TOP_P,
-                    "max_tokens": CHAT_MODEL_MAX_TOKENS,
                 }
             }
         )
@@ -530,7 +585,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: HGAConfigEntry) -> bool:
                     ),
                     "temperature": chat_temp,
                     "top_p": CHAT_MODEL_TOP_P,
-                    "max_tokens": CHAT_MODEL_MAX_TOKENS,
                 }
             }
         )
@@ -540,15 +594,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: HGAConfigEntry) -> bool:
         )
         rf_chat = reasoning_field(model=ollama_chat_model, enabled=ollama_reasoning)
         ollama_chat_model_options = {**ollama_chat_model_options, **rf_chat}
-        chat_model = (ollama_provider or NullChat()).with_config(
+        chat_model = (chat_ollama_provider or NullChat()).with_config(
             config={
                 "configurable": {
                     "model": ollama_chat_model,
                     "temperature": chat_temp,
                     "top_p": CHAT_MODEL_TOP_P,
                     "num_predict": CHAT_MODEL_MAX_TOKENS,
-                    "num_ctx": CHAT_MODEL_NUM_CTX,
+                    "num_ctx": ollama_chat_context_size,
                     "repeat_penalty": CHAT_MODEL_REPEAT_PENALTY,
+                    "keep_alive": ollama_chat_keep_alive,
                     **rf_chat,
                 }
             }
@@ -566,7 +621,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: HGAConfigEntry) -> bool:
                     ),
                     "temperature": vlm_temp,
                     "top_p": VLM_TOP_P,
-                    "max_tokens": VLM_NUM_PREDICT,
                 }
             }
         )
@@ -577,22 +631,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: HGAConfigEntry) -> bool:
                     "model": entry.options.get(CONF_GEMINI_VLM, RECOMMENDED_GEMINI_VLM),
                     "temperature": vlm_temp,
                     "top_p": VLM_TOP_P,
-                    "max_tokens": VLM_NUM_PREDICT,
                 }
             }
         )
     else:
         ollama_vlm = entry.options.get(CONF_OLLAMA_VLM, RECOMMENDED_OLLAMA_VLM)
         rf_vlm = reasoning_field(model=ollama_vlm, enabled=ollama_reasoning)
-        vision_model = (ollama_provider or NullChat()).with_config(
+        vision_model = (vlm_ollama_provider or NullChat()).with_config(
             config={
                 "configurable": {
                     "model": ollama_vlm,
                     "temperature": vlm_temp,
                     "top_p": VLM_TOP_P,
                     "num_predict": VLM_NUM_PREDICT,
-                    "num_ctx": VLM_NUM_CTX,
+                    "num_ctx": entry.options.get(
+                        CONF_OLLAMA_VLM_CONTEXT_SIZE, RECOMMENDED_OLLAMA_CONTEXT_SIZE
+                    ),
                     "repeat_penalty": VLM_REPEAT_PENALTY,
+                    "mirostat": VLM_MIRO_STAT,
+                    "keep_alive": entry.options.get(
+                        CONF_OLLAMA_VLM_KEEPALIVE, RECOMMENDED_OLLAMA_VLM_KEEPALIVE
+                    ),
                     **rf_vlm,
                 }
             }
@@ -616,7 +675,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: HGAConfigEntry) -> bool:
                     ),
                     "temperature": sum_temp,
                     "top_p": SUMMARIZATION_MODEL_TOP_P,
-                    "max_tokens": SUMMARIZATION_MODEL_PREDICT,
                 }
             }
         )
@@ -630,7 +688,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: HGAConfigEntry) -> bool:
                     ),
                     "temperature": sum_temp,
                     "top_p": SUMMARIZATION_MODEL_TOP_P,
-                    "max_tokens": SUMMARIZATION_MODEL_PREDICT,
                 }
             }
         )
@@ -642,15 +699,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: HGAConfigEntry) -> bool:
         rf_summarization = reasoning_field(
             model=ollama_summarization_model, enabled=ollama_reasoning
         )
-        summarization_model = (ollama_provider or NullChat()).with_config(
+        summarization_model = (summarization_ollama_provider or NullChat()).with_config(
             config={
                 "configurable": {
                     "model": ollama_summarization_model,
                     "temperature": sum_temp,
                     "top_p": SUMMARIZATION_MODEL_TOP_P,
                     "num_predict": SUMMARIZATION_MODEL_PREDICT,
-                    "num_ctx": SUMMARIZATION_MODEL_CTX,
+                    "num_ctx": entry.options.get(
+                        CONF_OLLAMA_SUMMARIZATION_CONTEXT_SIZE,
+                        RECOMMENDED_OLLAMA_CONTEXT_SIZE,
+                    ),
                     "repeat_penalty": SUMMARIZATION_MODEL_REPEAT_PENALTY,
+                    "mirostat": SUMMARIZATION_MIRO_STAT,
+                    "keep_alive": entry.options.get(
+                        CONF_OLLAMA_SUMMARIZATION_KEEPALIVE,
+                        RECOMMENDED_OLLAMA_SUMMARIZATION_KEEPALIVE,
+                    ),
                     **rf_summarization,
                 }
             }
@@ -658,8 +723,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: HGAConfigEntry) -> bool:
 
     video_analyzer = VideoAnalyzer(hass, entry)
 
-    face_mode = entry.options.get(
-        CONF_FACE_RECOGNITION_MODE, RECOMMENDED_FACE_RECOGNITION_MODE
+    face_recognition = entry.options.get(
+        CONF_FACE_RECOGNITION, RECOMMENDED_FACE_RECOGNITION
     )
 
     # Save runtime data.
@@ -672,9 +737,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: HGAConfigEntry) -> bool:
         video_analyzer=video_analyzer,
         checkpointer=checkpointer,
         pool=pool,
-        face_mode=face_mode,
+        face_recognition=face_recognition,
         face_api_url=face_api_url,
         person_gallery=person_gallery,
+        pending_actions={},
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -694,7 +760,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: HGAConfigEntry) -> bool:
         sum_provider,
         embedding_provider,
         openai_ok,
-        ollama_ok,
+        ollama_any_ok,
         gemini_ok,
     )
 

@@ -1,27 +1,27 @@
-##############################################################
-# ⏰ БУДИЛЬНИКИ
-##############################################################
 - id: '1758485977699'
   alias: Будильник 5:50 (утро, если дома)
-  trigger:
-    - platform: time
-      at: "05:50:00"
-  condition:
-    - condition: sun
-      after: sunrise
-      before: sunset
-    - condition: zone
-      entity_id: person.pilot
-      zone: zone.zona_doma
-  action:
-    - service: scene.turn_on
-      target:
-        entity_id: scene.outside_light
+  triggers:
+  - at: 05:50:00
+    trigger: time
+  conditions:
+  - condition: zone
+    entity_id: person.pilot
+    zone: zone.zona_doma
+  - condition: time
+    weekday:
+    - fri
+    - thu
+    - wed
+    - tue
+    - mon
+    after: 05:00:00
+    before: 07:00:00
+  actions:
+  - action: notify.mobile_app_iphone_andrey
+    metadata: {}
+    data:
+      message: 'Утро наступило! Скорей вставай и двигайся на работу '
   mode: single
-
-##############################################################
-# 🏠 ПРИСУТСТВИЕ
-##############################################################
 - id: '1758565181246'
   alias: Люда не дома
   description: Когда Люда выходит из дома
@@ -31,126 +31,185 @@
       person_entity: person.lydmila
       zone_entity: zone.zona_doma
       notify_device: 61dadb1c71ea3f1f584778bcf7887979
-
-##############################################################
-# 📸 КАМЕРЫ И УВЕДОМЛЕНИЯ
-##############################################################
 - id: '1758828162807'
   alias: Фото калитки в Telegram
   trigger:
-    # исходный триггер был device-change; заменил на state-триггер для switch-entity
-    - platform: state
-      entity_id: switch.ebb0e68cf97d1d4f4ec9b27321928471
+  - platform: state
+    entity_id: switch.ebb0e68cf97d1d4f4ec9b27321928471
   action:
-    - service: script.outside_camera_snapshot_send
-    - delay: "00:00:05"
-    - service: notify.telegram
-      data:
-        message: "Фото калитки отправлено 📷"
+  - service: script.outside_camera_snapshot_send
+  - delay: 00:00:05
+  - service: notify.telegram
+    data:
+      message: "Фото калитки отправлено \U0001F4F7"
   mode: single
-
 - id: '1759568984689'
   alias: Фото прихожей в Telegram
   trigger:
-    - platform: state
-      entity_id: sensor.mi_6525865227_message
+  - platform: state
+    entity_id: sensor.mi_6525865227_message
   condition:
-    - condition: template
-      value_template: "{{ 'Обнаружено движение' in trigger.to_state.state }}"
+  - condition: template
+    value_template: '{{ ''Обнаружено движение'' in trigger.to_state.state }}'
   action:
-    - service: script.hallway_camera_snapshot_send
-    - delay: "00:00:05"
-    - service: notify.telegram
-      data:
-        message: "📸 Фото из прихожей отправлено"
+  - service: script.hallway_camera_snapshot_send
+  - delay: 00:00:05
+  - service: notify.telegram
+    data:
+      message: "\U0001F4F8 Фото из прихожей отправлено"
   mode: single
-
 - id: '1761435419954'
   alias: Уведомление о статусе света на улице
   trigger:
-    # аналогично: заменил device-триггер на state-триггер для switch-entity
-    - platform: state
-      entity_id: switch.c0e2dbf9bfc9b4acbf9c79057b25fcb1
+  - platform: state
+    entity_id: switch.c0e2dbf9bfc9b4acbf9c79057b25fcb1
   action:
-    - service: notify.telegram
-      data:
-        message: "💡 Свет на улице выключен/включен"
+  - service: notify.telegram
+    data:
+      message: "\U0001F4A1 Свет на улице выключен/включен"
   mode: single
-
-##############################################################
-# 🤖 ГОЛОСОВЫЕ КОМАНДЫ (WYOMING + GEMINI)
-##############################################################
-- id: 'wyoming_voice_processing'
+- id: wyoming_voice_processing
   alias: Обработка голосовых команд через Wyoming
   trigger:
-    - platform: event
-      event_type: assist_pipeline.run
+  - platform: event
+    event_type: assist_pipeline.run
   action:
-    - service: script.process_voice_command
-      data:
-        question: "{{ trigger.event.data.text }}"
+  - service: script.process_voice_command
+    data:
+      question: '{{ trigger.event.data.text }}'
   mode: single
-
-- id: 'wyoming_voice_logging'
+- id: wyoming_voice_logging
   alias: Логирование голосовых команд
   trigger:
-    - platform: event
-      event_type: assist_pipeline.run
+  - platform: event
+    event_type: assist_pipeline.run
   action:
-    - service: persistent_notification.create
-      data:
-        title: "Голосовая команда"
-        message: "Получено: {{ trigger.event.data.text }}"
-        notification_id: "voice_command_log"
+  - service: persistent_notification.create
+    data:
+      title: Голосовая команда
+      message: 'Получено: {{ trigger.event.data.text }}'
+      notification_id: voice_command_log
   mode: single
-
 - id: '1759561522769'
   alias: Telegram Gemini Assistant
   description: Обработка сообщений Telegram через Gemini AI
   trigger:
-    - platform: event
-      event_type: telegram_message
+  - platform: event
+    event_type: telegram_message
   variables:
-    user_text: "{{ trigger.event.data.text | default('') }}"
+    user_text: '{{ trigger.event.data.text | default('''') }}'
   action:
-    - choose:
-        - conditions:
-            - condition: template
-              value_template: "{{ user_text == '/start' }}"
-          sequence:
-            - service: notify.telegram
-              data:
-                message: "Привет! Я ваш AI-помощник 🤖 Задавайте вопросы!"
-        - conditions:
-            - condition: template
-              value_template: "{{ user_text not in ['', '/start'] }}"
-          sequence:
-            - service: conversation.process
-              data:
-                text: "{{ user_text }}"
-            - delay: "00:00:03"
-            - service: notify.telegram
-              data:
-                message: "{{ states('conversation.last_response') | default('Нет ответа от AI 😕') }}"
+  - choose:
+    - conditions:
+      - condition: template
+        value_template: '{{ user_text == ''/start'' }}'
+      sequence:
+      - service: notify.telegram
+        data:
+          message: "Привет! Я ваш AI-помощник \U0001F916 Задавайте вопросы!"
+    - conditions:
+      - condition: template
+        value_template: '{{ user_text not in ['''', ''/start''] }}'
+      sequence:
+      - service: conversation.process
+        data:
+          text: '{{ user_text }}'
+      - delay: 00:00:03
+      - service: notify.telegram
+        data:
+          message: "{{ states('conversation.last_response') | default('Нет ответа
+            от AI \U0001F615') }}"
   mode: single
-
-##############################################################
-# 🧩 ОТЛАДКА
-##############################################################
-- id: 'debug_telegram_events'
+- id: debug_telegram_events
   alias: Debug Telegram Events
   description: Логирование всех Telegram-событий для отладки
   trigger:
-    - platform: event
-      event_type: telegram_message
+  - platform: event
+    event_type: telegram_message
   action:
-    - service: persistent_notification.create
-      data:
-        title: "Telegram Event Debug"
-        message: |
-          Полное событие:
-          {{ trigger }}
-          ---
-          Текст: {{ trigger.data.text | default('NO_TEXT') }}
-          Chat ID: {{ trigger.data.chat_id | default('NO_CHAT_ID') }}
+  - service: persistent_notification.create
+    data:
+      title: Telegram Event Debug
+      message: 'Полное событие:
+
+        {{ trigger }}
+
+        ---
+
+        Текст: {{ trigger.data.text | default(''NO_TEXT'') }}
+
+        Chat ID: {{ trigger.data.chat_id | default(''NO_CHAT_ID'') }}
+
+        '
   mode: single
+- id: '1763918349164'
+  alias: Оповещение о доступности свет на улице
+  description: ''
+  triggers:
+  - trigger: state
+    entity_id:
+    - select.sonoff_1002530832_1
+  conditions: []
+  actions:
+  - action: notify.notify
+    metadata: {}
+    data:
+      message: 'Привет света выключили '
+  mode: single
+- id: '1763924425190'
+  alias: Оповещение о запуске генератора
+  description: ''
+  triggers:
+  - type: connected
+    device_id: 8ef4327f3565c85cdff3e72796c8728b
+    entity_id: 82cac082dc492322273009ca14967906
+    domain: binary_sensor
+    trigger: device
+  conditions: []
+  actions:
+  - action: notify.notify
+    metadata: {}
+    data:
+      message: Генератор запущен
+  mode: single
+- alias: Speak AI Answer
+  trigger:
+  - platform: state
+    entity_id: input_text.assistant_answer
+  action:
+  - service: tts.google_translate_say
+    target:
+      entity_id: media_player.your_speaker
+    data:
+      message: '{{ states(''input_text.assistant_answer'') }}'
+  id: c6aafde3bad847f9a8a8c1c383f25a55
+- alias: Ask local AI
+  mode: single
+  trigger:
+  - platform: state
+    entity_id: input_text.assistant_question
+  condition:
+  - condition: template
+    value_template: '{{ trigger.to_state.state | length > 3 }}'
+  action:
+  - service: rest_command.ask_local_ai
+    response_variable: ai_response
+  - service: input_text.set_value
+    target:
+      entity_id: input_text.assistant_answer
+    data:
+      value: '{{ ai_response.content.response }}'
+  id: ae8babc48715433f996d198f7245db0a
+- alias: Process Voice Command with DeepSeek
+  trigger:
+    platform: event
+    event_type: conversation_process
+  action:
+  - service: rest_command.ask_deepseek
+    data:
+      prompt: '{{ trigger.event.data.text }}'
+  - service: tts.google_translate_say
+    data:
+      entity_id: media_player.your_speaker
+      message: '{{ states(''sensor.last_ai_response'') }}'
+  id: 04efa35c3da14062bf2e3f2ed9b8c7fc

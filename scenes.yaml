@@ -68,3 +68,59 @@
     automation.testovoe_uvedomlenie_v_telegram:
       entity_only: true
   icon: mdi:cctv
+- id: '1763917802624'
+  name: Свет_на_улице_Доступен_Сцена
+  entities:
+    select.sonoff_100252f1b9_1:
+      options:
+      - 'off'
+      - 'on'
+      - stay
+      friendly_name: Гараж освещение в Дом в eEeLink
+      state: stay
+  metadata:
+    select.sonoff_100252f1b9_1:
+      entity_only: true
+  icon: mdi:alarm-light-outline
+- id: '1765492747024'
+  name: Новая сцена
+  entities:
+    sensor.garazh_generator_battery:
+      state_class: measurement
+      unit_of_measurement: '%'
+      device_class: battery
+      friendly_name: Гараж генератор Батарея
+      state: '100.0'
+    sensor.garazh_generator_humidity:
+      state_class: measurement
+      unit_of_measurement: '%'
+      device_class: humidity
+      friendly_name: Гараж генератор Влажность
+      state: '60.0'
+    sensor.garazh_generator_temperature:
+      state_class: measurement
+      unit_of_measurement: °C
+      device_class: temperature
+      friendly_name: Гараж генератор Температура
+      state: '11.7'
+    sensor.temperatura_generatora:
+      state_class: total
+      status: collecting
+      last_period: '0'
+      last_valid_state: '11.7'
+      last_reset: '2025-11-23T19:07:24.815120+00:00'
+      unit_of_measurement: °C
+      device_class: temperature
+      friendly_name: Температура генератора
+      state: '4.7'
+    sensor.temperatura_generatora_2:
+      state_class: total_increasing
+      status: collecting
+      last_period: '0'
+      last_valid_state: '11.7'
+      last_reset: '2025-12-07T01:28:56.061768+00:00'
+      unit_of_measurement: °C
+      device_class: temperature
+      friendly_name: Температура генератора
+      state: '12.2'
+  metadata: {}

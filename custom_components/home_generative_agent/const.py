@@ -1,12 +1,35 @@
 """Constants for Home Generative Agent."""
 
-from typing import Any, Literal, get_args
+from typing import Annotated, Any, Literal, get_args
+
+from annotated_types import Ge, Le
 
 DOMAIN = "home_generative_agent"
 
 HTTP_STATUS_UNAUTHORIZED = 401
 HTTP_STATUS_BAD_REQUEST = 400
 HTTP_STATUS_WEBPAGE_NOT_FOUND = 404
+
+# ---- Critical action guard ----
+CONF_CRITICAL_ACTION_PIN_ENABLED = "critical_action_pin_enabled"
+CONF_CRITICAL_ACTION_PIN = "critical_action_pin"
+CONF_CRITICAL_ACTION_PIN_HASH = "critical_action_pin_hash"
+CONF_CRITICAL_ACTION_PIN_SALT = "critical_action_pin_salt"
+CONF_CRITICAL_ACTIONS = "critical_actions"
+RECOMMENDED_CRITICAL_ACTIONS: list[dict[str, str]] = [
+    {"domain": "lock", "service": "unlock"},
+    {"domain": "lock", "service": "open"},
+    # Covers: guard only doors/gates/garages, not windows/shades
+    {"domain": "cover", "service": "open_cover", "entity_match": "door"},
+    {"domain": "cover", "service": "open_cover", "entity_match": "gate"},
+    {"domain": "cover", "service": "open_cover", "entity_match": "garage"},
+    {"domain": "cover", "service": "open", "entity_match": "door"},
+    {"domain": "cover", "service": "open", "entity_match": "gate"},
+    {"domain": "cover", "service": "open", "entity_match": "garage"},
+    {"domain": "garage_door", "service": "open"},
+]
+CRITICAL_PIN_MIN_LEN = 4
+CRITICAL_PIN_MAX_LEN = 10
 
 # ---- PostgreSQL (vector store + checkpointer) ----
 CONF_DB_URI = "db_uri"
@@ -17,23 +40,39 @@ CONF_DB_BOOTSTRAPPED = "db_bootstrapped"
 
 # ---- Notify service (for mobile push notifications) ----
 CONF_NOTIFY_SERVICE = "notify_service"
+LLM_HASS_API_NONE = "none"
 
 # ---- LangChain logging ----
 # See https://python.langchain.com/docs/how_to/debugging/
 LANGCHAIN_LOGGING_LEVEL: Literal["disable", "verbose", "debug"] = "disable"
 
-# --- Reasoning delimiters ---
-# These delimiters are used to mark the start and end of reasoning blocks in the model's
-# responses.
-# These may be model dependent, the defaults work for qwen3.
-REASONING_DELIMITERS: dict[str, str] = {
-    "start": "<think>",
-    "end": "</think>",
-}
 
-# ---- Ollama ----
+# ---- Global Ollama Options ----
+RECOMMENDED_OLLAMA_CONTEXT_SIZE = 32000
+
+# Ollama keepalive limits (seconds)
+KEEPALIVE_MIN_SECONDS: int = 0  # 0 = unload immediately
+KEEPALIVE_MAX_SECONDS: int = 15 * 60  # 900 = 15 minutes
+KEEPALIVE_SENTINEL: int = -1  # never unload
+
+KeepAliveSeconds = (
+    Annotated[int, Ge(KEEPALIVE_MIN_SECONDS), Le(KEEPALIVE_MAX_SECONDS)] | Literal[-1]
+)
+
 CONF_OLLAMA_URL = "ollama_url"
 RECOMMENDED_OLLAMA_URL = "http://localhost:11434"
+
+CONF_OLLAMA_CHAT_URL = "ollama_chat_url"
+RECOMMENDED_OLLAMA_CHAT_URL = RECOMMENDED_OLLAMA_URL
+CONF_OLLAMA_VLM_URL = "ollama_vlm_url"
+RECOMMENDED_OLLAMA_VLM_URL = RECOMMENDED_OLLAMA_URL
+CONF_OLLAMA_SUMMARIZATION_URL = "ollama_summarization_url"
+RECOMMENDED_OLLAMA_SUMMARIZATION_URL = RECOMMENDED_OLLAMA_URL
+OLLAMA_CATEGORY_URL_KEYS = {
+    "chat": CONF_OLLAMA_CHAT_URL,
+    "vlm": CONF_OLLAMA_VLM_URL,
+    "summarization": CONF_OLLAMA_SUMMARIZATION_URL,
+}
 
 CONF_OLLAMA_REASONING = "ollama_reasoning"
 RECOMMENDED_OLLAMA_REASONING: bool = False
@@ -55,10 +94,7 @@ CONF_GEMINI_API_KEY = "gemini_api_key"
 
 # ---------------- Chat model ----------------
 CHAT_MODEL_TOP_P = 1.0
-CHAT_MODEL_NUM_CTX = 32768
-CHAT_MODEL_MAX_TOKENS = 4096
-CHAT_MODEL_REPEAT_PENALTY = 1.05
-# Add more models by extending the Literal types.
+# *SUPPORTED are used as defaults and fallbacks for Ollama in the UI.
 CHAT_MODEL_OLLAMA_SUPPORTED = Literal["gpt-oss", "qwen2.5:32b", "qwen3:32b", "qwen3:8b"]
 CHAT_MODEL_OPENAI_SUPPORTED = Literal[
     "gpt-5", "gpt-5-mini", "gpt-5-nano", "gpt-4o", "gpt-4.1", "o4-mini"
@@ -72,7 +108,12 @@ PROVIDERS = Literal["openai", "ollama", "gemini"]
 RECOMMENDED_CHAT_MODEL_PROVIDER: PROVIDERS = "ollama"
 
 CONF_OLLAMA_CHAT_MODEL = "ollama_chat_model"
-RECOMMENDED_OLLAMA_CHAT_MODEL: CHAT_MODEL_OLLAMA_SUPPORTED = "qwen3:8b"
+RECOMMENDED_OLLAMA_CHAT_MODEL: CHAT_MODEL_OLLAMA_SUPPORTED = "gpt-oss"
+CONF_OLLAMA_CHAT_KEEPALIVE = "ollama_chat_keepalive"
+RECOMMENDED_OLLAMA_CHAT_KEEPALIVE: KeepAliveSeconds = 300
+CONF_OLLAMA_CHAT_CONTEXT_SIZE = "ollama_chat_context_size"
+CHAT_MODEL_MAX_TOKENS = -2  # Ollama only, -2 = fill context
+CHAT_MODEL_REPEAT_PENALTY = 1.05  # Ollama only
 
 CONF_OPENAI_CHAT_MODEL = "openai_chat_model"
 RECOMMENDED_OPENAI_CHAT_MODEL: CHAT_MODEL_OPENAI_SUPPORTED = "gpt-5"
@@ -81,19 +122,27 @@ CONF_GEMINI_CHAT_MODEL = "gemini_chat_model"
 RECOMMENDED_GEMINI_CHAT_MODEL: CHAT_MODEL_GEMINI_SUPPORTED = "gemini-2.5-flash-lite"
 
 CONF_CHAT_MODEL_TEMPERATURE = "chat_model_temperature"
-RECOMMENDED_CHAT_MODEL_TEMPERATURE = 1.0
+RECOMMENDED_CHAT_MODEL_TEMPERATURE = 0.2
 
-# Context management (for trimming history)
-CONTEXT_MANAGE_USE_TOKENS = True
-CONTEXT_MAX_MESSAGES = 80
-# Keep buffer for tools + token counter undercount (see repo notes).
-CONTEXT_MAX_TOKENS = CHAT_MODEL_NUM_CTX - CHAT_MODEL_MAX_TOKENS - 2048 - 4096  # 26624
+## Context management (for trimming chat history) ##
+
+# Ollama exact token counting option.
+# Set False to get fast, approximate token counts.
+# Recommended for using `trim_messages` on the hot path, where
+# exact token counting is not necessary.
+OLLAMA_EXACT_TOKEN_COUNT: bool = False
+
+CONF_MANAGE_CONTEXT_WITH_TOKENS = "manage_context_with_tokens"
+RECOMMENDED_MANAGE_CONTEXT_WITH_TOKENS: Literal["true", "false"] = "true"
+CONF_MAX_TOKENS_IN_CONTEXT = "max_tokens_in_context"
+# For Ollama models, this should be <= model context size.
+RECOMMENDED_MAX_TOKENS_IN_CONTEXT = 32000
+
+CONF_MAX_MESSAGES_IN_CONTEXT = "max_messages_in_context"
+RECOMMENDED_MAX_MESSAGES_IN_CONTEXT = 60
 
 # ---------------- VLM (vision) ----------------
-VLM_TOP_P = 1
-VLM_NUM_PREDICT = 4096
-VLM_NUM_CTX = 16384
-VLM_REPEAT_PENALTY = 1.05
+VLM_TOP_P = 1.0
 VLM_OLLAMA_SUPPORTED = Literal["qwen2.5vl:7b", "qwen3-vl:8b"]
 VLM_OPENAI_SUPPORTED = Literal["gpt-5-nano", "gpt-4.1", "gpt-4.1-nano"]
 VLM_GEMINI_SUPPORTED = Literal[
@@ -105,6 +154,12 @@ RECOMMENDED_VLM_PROVIDER: Literal["openai", "ollama", "gemini"] = "ollama"
 
 CONF_OLLAMA_VLM = "ollama_vlm"
 RECOMMENDED_OLLAMA_VLM: VLM_OLLAMA_SUPPORTED = "qwen3-vl:8b"
+CONF_OLLAMA_VLM_KEEPALIVE = "ollama_vlm_keepalive"
+RECOMMENDED_OLLAMA_VLM_KEEPALIVE: KeepAliveSeconds = 300
+CONF_OLLAMA_VLM_CONTEXT_SIZE = "ollama_vlm_context_size"
+VLM_NUM_PREDICT = -2  # Ollama only, -2 = fill context
+VLM_REPEAT_PENALTY = 1.05  # Ollama only
+VLM_MIRO_STAT = 0  # Ollama only
 
 CONF_OPENAI_VLM = "openai_vlm"
 RECOMMENDED_OPENAI_VLM: VLM_OPENAI_SUPPORTED = "gpt-5-nano"
@@ -113,7 +168,7 @@ CONF_GEMINI_VLM = "gemini_vlm"
 RECOMMENDED_GEMINI_VLM: VLM_GEMINI_SUPPORTED = "gemini-2.5-flash-lite"
 
 CONF_VLM_TEMPERATURE = "vlm_temperature"
-RECOMMENDED_VLM_TEMPERATURE = 0.0001
+RECOMMENDED_VLM_TEMPERATURE = 0.2
 
 # Prompts + input image size
 VLM_SYSTEM_PROMPT = """
@@ -158,7 +213,6 @@ FRAME DESCRIPTION REQUEST
 Describe this image clearly and factually in 1-3 sentences.
 Follow the style and rules from the system prompt.
 Do not add names, timestamps, or speculation.
-Return plain English text only.
 """
 VLM_USER_KW_TEMPLATE = """
 FRAME DESCRIPTION REQUEST (FOCUSED)
@@ -167,16 +221,12 @@ Primary attention: {key_words}
 Describe this image clearly and factually in 1-3 sentences, focusing on the listed items if present.
 Follow the style and rules from the system prompt.
 Do not add names, timestamps, or speculation.
-Return plain English text only.
 """  # noqa: E501
 VLM_IMAGE_WIDTH = 1920
 VLM_IMAGE_HEIGHT = 1080
 
 # ---------------- Summarization ----------------
-SUMMARIZATION_MODEL_TOP_P = 1
-SUMMARIZATION_MODEL_PREDICT = 4096
-SUMMARIZATION_MODEL_CTX = 32768
-SUMMARIZATION_MODEL_REPEAT_PENALTY = 1.05
+SUMMARIZATION_MODEL_TOP_P = 1.0
 SUMMARIZATION_MODEL_OLLAMA_SUPPORTED = Literal["qwen3:1.7b", "qwen3:8b"]
 SUMMARIZATION_MODEL_OPENAI_SUPPORTED = Literal["gpt-5-nano", "gpt-4.1", "gpt-4.1-nano"]
 SUMMARIZATION_MODEL_GEMINI_SUPPORTED = Literal[
@@ -190,8 +240,14 @@ RECOMMENDED_SUMMARIZATION_MODEL_PROVIDER: Literal["openai", "ollama", "gemini"] 
 
 CONF_OLLAMA_SUMMARIZATION_MODEL = "ollama_summarization_model"
 RECOMMENDED_OLLAMA_SUMMARIZATION_MODEL: SUMMARIZATION_MODEL_OLLAMA_SUPPORTED = (
-    "qwen3:1.7b"
+    "qwen3:8b"
 )
+CONF_OLLAMA_SUMMARIZATION_KEEPALIVE = "ollama_summarization_keepalive"
+RECOMMENDED_OLLAMA_SUMMARIZATION_KEEPALIVE: KeepAliveSeconds = 300
+CONF_OLLAMA_SUMMARIZATION_CONTEXT_SIZE = "ollama_summarization_context_size"
+SUMMARIZATION_MODEL_PREDICT = -2  # Ollama only, -2 = fill context
+SUMMARIZATION_MODEL_REPEAT_PENALTY = 1.05  # Ollama only
+SUMMARIZATION_MIRO_STAT = 0  # Ollama only
 
 CONF_OPENAI_SUMMARIZATION_MODEL = "openai_summarization_model"
 RECOMMENDED_OPENAI_SUMMARIZATION_MODEL: SUMMARIZATION_MODEL_OPENAI_SUPPORTED = (
@@ -204,7 +260,7 @@ RECOMMENDED_GEMINI_SUMMARIZATION_MODEL: SUMMARIZATION_MODEL_GEMINI_SUPPORTED = (
 )
 
 CONF_SUMMARIZATION_MODEL_TEMPERATURE = "summarization_model_temperature"
-RECOMMENDED_SUMMARIZATION_MODEL_TEMPERATURE = 0
+RECOMMENDED_SUMMARIZATION_MODEL_TEMPERATURE = 0.2
 
 # Prompts for summarization (used in graph/tools flows)
 SUMMARIZATION_SYSTEM_PROMPT = (
@@ -250,9 +306,11 @@ Represent this sentence for searching relevant passages: {query}
 
 # ---------------- Camera video analyzer ----------------
 CONF_VIDEO_ANALYZER_MODE = "video_analyzer_mode"
-RECOMMENDED_VIDEO_ANALYZER_MODE: Literal[
-    "disable", "notify_on_anomaly", "always_notify"
-] = "disable"
+VideoAnalyzerMode = Literal["disable", "notify_on_anomaly", "always_notify"]
+VIDEO_ANALYZER_MODE_DISABLE: VideoAnalyzerMode = "disable"
+VIDEO_ANALYZER_MODE_NOTIFY_ON_ANOMALY: VideoAnalyzerMode = "notify_on_anomaly"
+VIDEO_ANALYZER_MODE_ALWAYS_NOTIFY: VideoAnalyzerMode = "always_notify"
+RECOMMENDED_VIDEO_ANALYZER_MODE: VideoAnalyzerMode = VIDEO_ANALYZER_MODE_DISABLE
 
 # Interval units are seconds.
 VIDEO_ANALYZER_SCAN_INTERVAL = 1.5
@@ -324,8 +382,8 @@ SIGNAL_HGA_NEW_LATEST = "hga_new_latest"
 SIGNAL_HGA_RECOGNIZED = "hga_recognized_people"
 
 # ---------------- Face recognition ----------------
-CONF_FACE_RECOGNITION_MODE = "face_recognition_mode"
-RECOMMENDED_FACE_RECOGNITION_MODE: Literal["enable", "disable"] = "disable"
+CONF_FACE_RECOGNITION = "face_recognition"
+RECOMMENDED_FACE_RECOGNITION: bool = False
 
 CONF_FACE_API_URL = "face_api_url"
 RECOMMENDED_FACE_API_URL = "http://face-recog-server.local:8000"
@@ -340,6 +398,17 @@ TOOL_CALL_ERROR_TEMPLATE = """
 Error: {error}
 
 Call the tool again with your mistake corrected.
+"""
+CRITICAL_ACTION_PROMPT = """
+Critical actions (door/lock/garage/open) require user confirmation.
+- If a tool response has status "requires_pin", ask the user for the PIN they set and
+  then call the "confirm_sensitive_action" tool with the provided action_id and PIN.
+- Never guess or invent a PIN. Do not proceed without a PIN. If the user refuses or
+  fails, inform them and do not re-attempt the action.
+- Do not expose or repeat the PIN in responses beyond acknowledging success/failure.
+- Alarm control uses the alarm system code, not the critical-action PIN. When arming or
+  disarming an alarm, ask for the alarm code and include it in the tool call. Do NOT
+  call "confirm_sensitive_action" for alarm control.
 """
 HISTORY_TOOL_CONTEXT_LIMIT = 50
 HISTORY_TOOL_PURGE_KEEP_DAYS = 10
